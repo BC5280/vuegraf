@@ -2,7 +2,7 @@ name: 'Lock Threads'
 
 on:
   schedule:
-    - cron: '50 3 * * *'
+    - cron: '50 8 * * *'
   workflow_dispatch:
 
 permissions:
@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   lock-threads:
+    if: github.repository_owner == 'jertel'
     runs-on: ubuntu-latest
     steps:
       - uses: jertel/lock-threads@main

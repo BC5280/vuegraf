@@ -106,7 +106,12 @@ For a list of timezones as of late 2023, consult the `TZ identifier` column of t
 
 ### Ingesting Historical Data
 
-If desired, it is possible to have Vuegraf import historical data. To do so, run vuegraf.py with the optional `--historydays` parameter with a value between 1 and 720.  When this parameter is provided Vuegraf will start and collect all hourly data points up to the specified parameter, or max history available.  It will also collect one day's summary data for each day, storing it with the timestamp 23:59:59 for each day.  It collects the time using the configured timezone, but stores it in influxDB in UTC.
+If desired, it is possible to have Vuegraf import historical data. To do so, run vuegraf.py with the optional `--historydays` parameter with a value between 1 and 720 (configurable).  When this parameter is provided Vuegraf will start and collect all hourly data points up to the specified parameter, or max history available.  It will also collect one day's summary data for each day, storing it with the timestamp 23:59:59 for each day based on the configured timezone. It is possible to control the maximum number of days (default is 720) that the historical data can be collected by adding (or updating) the top-level `maxHistoryDays` configuration value with a numeric value.
+
+```
+maxHistoryDays: 720
+```
+
 
 IMPORTANT - If you restart Vuegraf with `--historydays` on the command line (or forget to remove it from the dockerfile) it will import history data _again_. This will likely cause confusion with your data since you will now have duplicate/overlapping data. For best results, only enable `--historydays` on a single run.
 
@@ -151,6 +156,12 @@ Be aware that the included dashboard assumes your device name contains the word 
                 }
             ]
 ```
+
+### Station Names
+
+If you intend to run multiple Vue systems under the same account, where the channel names duplicate or look similar across those Vue systems then you may want to consider enabling the `addStationField` config parameter. This will include an additional field named 'station_name' in the InfluxDB event record, to help distinguish channel names across those Vue systems or 'stations'.
+
+Note that enabling this at a later time will cause issues due to queries matching multiple records. Therefore if you are installing Vuegraf for the first time and think this could be useful then enable it at the start.
 
 # Running
 Vuegraf can be run either as a container (recommended), or as a host process.
@@ -261,6 +272,39 @@ For every datapoint a tag is stored in InfluxDB for the type of measurement
 When building graphs that show a sum of the energy usage, be sure to only include the correct detail tag, otherwise your summed values will be higher than expected. Detailed data will take more time for the graphs to query due to the extra data involved. If you want to have a chart that shows daily data over a long period or even a full year, use the `detailed = Day` tag.
 If you are running this on a small server, you might want to look at setting a RETENTION POLICY on your InfluxDB bucket to remove minute or second data over time. For example, it will reduce storage needs if you retain only 30 days of per-_second_ data. 
 
+The name of the "detailed" tag as well as the associated tag values (True, False, Hour, Day) can be changed via the configuration file by providing the appropriate value within the InfluxDb section:
+
+- `tagName` will be name of the tag within the database. Default value is `detailed`
+- `tagValue_second` will be the value set for the tagName for the per-second data.  Default value is `True`
+- `tagValue_minute` will be the value set for the tagName for the per-minute data.  Default value is `False`
+- `tagValue_hour` will be the value set for the tagName for the per-hour data.  Default value is `Hour`
+- `tagValue_day` will be the value set for the tagName for the per-day data.  Default value is `Day`
+
+```json
+{
+    "influxDb": {
+        "version": 2,
+        "url": "http://my.influxdb.hostname:8086",
+        "org": "vuegraf",
+        "bucket": "vuegraf",
+        "token": "<my-influx-token>",
+        "tagName": "granularity",
+        "tagValue_second": "second",
+        "tagValue_minute": "minute",
+        "tagValue_hour": "hour",
+        "tagValue_day": "day"
+    },
+    "accounts": [
+        {
+            "name": "Primary Residence",
+            "email": "my@email.address",
+            "password": "my-emporia-password"
+        }
+    ]
+}
+```
+
+
 ## Vue Utility Connect Energy Monitor
 
 As reported in [discussion #104](https://github.com/jertel/vuegraf/discussions/104), the Utility Connect device is supported without any custom changes.
@@ -328,6 +372,21 @@ Login to the new Influx DB 2 UI from your web browser, using the _vuegraf / vueg
 
 Finally, apply the dashboard template as instructed earlier in this document.
 
+## Productionalizing the Server
+
+There are additional steps necessary for making this configuration fault tolerant. Consider implementing the following:
+
+- Configuring the container to always restart (such as after a reboot or a crash)
+- Backing up the InfluxDB on a frequent basis
+- Configure logging for rollover management, such as by file size or date
+- Configure OS alerts to an admin when detecting crashes of critical software, such as InfluxDB
+- Checking for low disk space on the host and alerting an admin
+- Setting up calendar reminders for host OS updates and associated kernel reboots
+- Updating Vuegraf and Influx on a schedule
+- Much more!
+
+These topics are out of scope of this project, but are intended to help new system administrators understand different areas that need to be considered for ensuring disaster recovery and prevention of vulnerabilities.
+ 
 # License
 
 Vuegraf is distributed under the MIT license.
